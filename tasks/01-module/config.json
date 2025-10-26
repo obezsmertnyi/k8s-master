@@ -1,0 +1,23 @@
+{
+  "ComputeMetadata": {
+    "V1": {
+      "Project": {
+        "ProjectID": "devops-automation-team-stage",
+        "NumericProjectID": 46529416186
+      },
+      "Instance": {
+        "name": "k8s-test-instance",
+        "id": 2983839776455586411,
+        "ServiceAccounts": {
+          "default": {
+            "Email": "terraform@devops-automation-team-stage.iam.gserviceaccount.com",
+            "Scopes": [
+              "https://www.googleapis.com/auth/cloud-platform",
+              "https://www.googleapis.com/auth/userinfo.email"
+            ]
+          }
+        }
+      }
+    }
+  }
+}
