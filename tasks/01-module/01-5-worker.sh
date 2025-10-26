@@ -5,8 +5,8 @@ set -euo pipefail
 # Run this script on GCP worker node
 
 # Configuration - Update these values
-CONTROL_PLANE_IP="${CONTROL_PLANE_IP:-<YOUR_CONTROL_PLANE_IP>}"
-CONTROL_PLANE_TOKEN="${CONTROL_PLANE_TOKEN:-<YOUR_TOKEN>}"
+CONTROL_PLANE_IP="${CONTROL_PLANE_IP:-127.0.0.1}"
+CONTROL_PLANE_TOKEN="${CONTROL_PLANE_TOKEN:-1234567890}"
 K8S_VERSION="v1.30.0"
 CONTAINERD_VERSION="2.0.5"
 CNI_VERSION="v1.6.2"
@@ -181,16 +181,17 @@ clusters:
 - cluster:
     insecure-skip-tls-verify: true
     server: https://${CONTROL_PLANE_IP}:6443
-  name: kubernetes
+  name: test-env
 contexts:
 - context:
-    cluster: kubernetes
+    cluster: test-env
     namespace: default
-    user: kubelet
-  name: kubelet-context
-current-context: kubelet-context
+    user: test-user
+  name: test-context
+current-context: test-context
+preferences: {}
 users:
-- name: kubelet
+- name: test-user
   user:
     token: "${CONTROL_PLANE_TOKEN}"
 EOF
