@@ -8,13 +8,16 @@ All tasks are organized in the [`tasks/`](./tasks/) directory, divided by module
 
 ## ✅ Completed Tasks
 
-### Module 01: Control Plane Setup
+### Module 01: Control Plane & Node Management
 
 | Task | Level | Status | Description | Files |
 |------|-------|--------|-------------|-------|
 | 01-1 | Basic | ✅ Complete | Static Pods for control plane components | [Details](./tasks/01-module/01-1.md) |
 | 01-2 | Advanced | ✅ Complete | kube-apiserver profiling with flame graph | [Script](./tasks/01-module/01-2.sh), [Flame Graph](./tasks/01-module/01-2-flame.svg) |
 | 01-3 | Expert | ✅ Complete | GCP Cloud Controller Manager with LoadBalancer | [Script](./tasks/01-module/01.3.sh), [Results](./tasks/01-module/01.3-done.md) |
+| 01-4 | Basic | ✅ Complete | Command history practice | |
+| 01-5 | Advanced | 📝 Planned | Register node to control plane via kubeconfig | [Guide](./tasks/01-module/01-5-node-registration-kubeconfig.md), [Script](./tasks/01-module/01-5-worker.sh) |
+| 01-6 | Expert | 📝 Planned | Register node to control plane via CSR | [Guide](./tasks/01-module/01-6-node-registration-csr.md), [Script](./tasks/01-module/01-6.sh) |
 
 **Module 01 Highlights:**
 - ✅ Deployed control plane using kubelet static pods
