@@ -36,16 +36,16 @@ All tasks are organized in the [`tasks/`](./tasks/) directory, divided by module
 | 02-1 | Basic | 📝 Planned | Create, build and run first custom controller |
 | 02-2 | Advanced | 📝 Planned | Implement tests and collect controller metrics |
 | 02-3 | Expert | 📝 Planned | Run controller in control plane with leader election |
+| 02-4 | Basic | 📝 Planned | Build GitOps loop with automated image updates |
+| 02-5 | Advanced | 📝 Planned | Break GitOps loop, migrate to gitless and solve imageupdate |
+| 02-6 | Expert | 📝 Planned | Configure ephemeral environments for GitHub PRs |
+
+**Learning Path:**
+- **Beginners**: Try to build a GitOps loop for an application with automated image updates (Task 02-4)
+- **Experienced**: Break the GitOps loop, migrate to gitless approach and solve the imageupdate challenge (Task 02-5)
+- **Advanced**: Configure ephemeral environments for GitHub Pull Requests using [Flux Operator ResourceSets](https://fluxcd.control-plane.io/operator/resourcesets/github-pull-requests/) (Task 02-6)
 
 ---
-
-### Module 03: GitOps with FluxCD
-
-| Task | Level | Status | Description |
-|------|-------|--------|-------------|
-| 03-1 | Basic | 📝 Planned | Build GitOps loop with automated image updates |
-| 03-2 | Advanced | 📝 Planned | Break GitOps loop, migrate to gitless and solve imageupdate |
-| 03-3 | Expert | 📝 Planned | Configure ephemeral environments for GitHub PRs |
 
 ---
 
