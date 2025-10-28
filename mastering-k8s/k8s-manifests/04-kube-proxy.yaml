@@ -1,0 +1,65 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kube-proxy
+  namespace: kube-system
+data:
+  kube-proxy.conf.yml: |
+    kind: KubeProxyConfiguration
+    apiVersion: kubeproxy.config.k8s.io/v1alpha1
+    clientConnection:
+      kubeconfig: "/var/lib/kubelet/kubeconfig"
+    mode: "iptables"
+    clusterCIDR: "173.22.0.0/16"
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: kube-proxy
+  namespace: kube-system
+  labels:
+    k8s-app: kube-proxy
+spec:
+  selector:
+    matchLabels:
+      k8s-app: kube-proxy
+  template:
+    metadata:
+      labels:
+        k8s-app: kube-proxy
+    spec:
+      hostNetwork: true
+      containers:
+      - name: kube-proxy
+        image: registry.k8s.io/kube-proxy:v1.30.0
+        command:
+        - /usr/local/bin/kube-proxy
+        - --config=/var/lib/kube-proxy/kube-proxy.conf.yml
+        - --v=2
+        securityContext:
+          privileged: true
+        volumeMounts:
+        - name: kube-proxy-config
+          mountPath: /var/lib/kube-proxy
+        - name: xtables-lock
+          mountPath: /run/xtables.lock
+        - name: lib-modules
+          mountPath: /lib/modules
+          readOnly: true
+        - name: kubeconfig
+          mountPath: /var/lib/kubelet
+          readOnly: true
+      volumes:
+      - name: kube-proxy-config
+        configMap:
+          name: kube-proxy
+      - name: xtables-lock
+        hostPath:
+          path: /run/xtables.lock
+          type: FileOrCreate
+      - name: lib-modules
+        hostPath:
+          path: /lib/modules
+      - name: kubeconfig
+        hostPath:
+          path: /var/lib/kubelet

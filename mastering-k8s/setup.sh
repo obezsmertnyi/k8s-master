@@ -3,7 +3,11 @@
 # Exit on error
 set -e
 
+# Configuration
+USE_TLS=${USE_TLS:-true}  # Set to false to disable TLS (insecure mode)
+
 echo "Setting up Kubernetes control plane for AMD64..."
+echo "TLS mode: $USE_TLS"
 
 # Function to check if a process is running
 is_running() {
@@ -18,6 +22,7 @@ check_running() {
     is_running "cloud-controller-manager" && \
     is_running "kube-scheduler" && \
     is_running "kubelet" && \
+    is_running "kube-proxy" && \
     is_running "containerd"
 }
 
@@ -90,6 +95,10 @@ download_components() {
 }
 
 setup_configs() {
+    # Create PKI directory
+    sudo mkdir -p /etc/kubernetes/pki
+    sudo mkdir -p /var/lib/kubelet/pki
+
     # Generate certificates and tokens if they don't exist
     if [ ! -f "/tmp/sa.key" ]; then
         openssl genrsa -out /tmp/sa.key 2048
@@ -101,19 +110,90 @@ setup_configs() {
         echo "${TOKEN},admin,admin,system:masters" > /tmp/token.csv
     fi
 
-    # Always regenerate and copy CA certificate to ensure it exists
-    echo "Generating CA certificate..."
-    openssl genrsa -out /tmp/ca.key 2048
-    openssl req -x509 -new -nodes -key /tmp/ca.key -subj "/CN=kubelet-ca" -days 365 -out /tmp/ca.crt
-    sudo mkdir -p /var/lib/kubelet/pki
-    sudo cp /tmp/ca.crt /var/lib/kubelet/ca.crt
-    sudo cp /tmp/ca.crt /var/lib/kubelet/pki/ca.crt
+    # Generate CA certificate if not exists
+    if [ ! -f "/etc/kubernetes/pki/ca.crt" ]; then
+        echo "Generating CA certificate..."
+        openssl genrsa -out /etc/kubernetes/pki/ca.key 2048
+        openssl req -x509 -new -nodes -key /etc/kubernetes/pki/ca.key \
+            -subj "/CN=kubernetes-ca" -days 365 -out /etc/kubernetes/pki/ca.crt
+    fi
+
+    # Copy CA to kubelet directory
+    sudo cp /etc/kubernetes/pki/ca.crt /var/lib/kubelet/ca.crt
+    sudo cp /etc/kubernetes/pki/ca.crt /var/lib/kubelet/pki/ca.crt
+
+    # Generate API server certificate if TLS is enabled
+    HOST_IP=$(hostname -I | awk '{print $1}')
+    if [ "$USE_TLS" = "true" ] && [ ! -f "/etc/kubernetes/pki/apiserver.crt" ]; then
+        echo "Generating API server certificate..."
+        
+        # Create OpenSSL config for API server
+        cat > /tmp/apiserver-openssl.cnf <<EOF
+[req]
+req_extensions = v3_req
+distinguished_name = req_distinguished_name
+
+[req_distinguished_name]
+
+[v3_req]
+basicConstraints = CA:FALSE
+keyUsage = nonRepudiation, digitalSignature, keyEncipherment
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = kubernetes
+DNS.2 = kubernetes.default
+DNS.3 = kubernetes.default.svc
+DNS.4 = kubernetes.default.svc.cluster.local
+DNS.5 = localhost
+IP.1 = 127.0.0.1
+IP.2 = $HOST_IP
+IP.3 = 10.0.0.1
+IP.4 = 16.0.0.1
+EOF
+
+        # Generate API server key and CSR
+        openssl genrsa -out /etc/kubernetes/pki/apiserver.key 2048
+        openssl req -new -key /etc/kubernetes/pki/apiserver.key \
+            -subj "/CN=kube-apiserver" \
+            -out /tmp/apiserver.csr \
+            -config /tmp/apiserver-openssl.cnf
+
+        # Sign with CA
+        openssl x509 -req -in /tmp/apiserver.csr \
+            -CA /etc/kubernetes/pki/ca.crt \
+            -CAkey /etc/kubernetes/pki/ca.key \
+            -CAcreateserial \
+            -out /etc/kubernetes/pki/apiserver.crt \
+            -days 365 \
+            -extensions v3_req \
+            -extfile /tmp/apiserver-openssl.cnf
+
+        sudo chmod 600 /etc/kubernetes/pki/apiserver.key
+        sudo chmod 644 /etc/kubernetes/pki/apiserver.crt
+    fi
 
     # Set up kubeconfig if not already configured
-    if ! sudo kubebuilder/bin/kubectl config current-context | grep -q "test-context"; then
+    if ! sudo kubebuilder/bin/kubectl config current-context 2>/dev/null | grep -q "test-context"; then
+        echo "Configuring kubectl..."
         sudo kubebuilder/bin/kubectl config set-credentials test-user --token=1234567890
-        sudo kubebuilder/bin/kubectl config set-cluster test-env --server=https://127.0.0.1:6443 --insecure-skip-tls-verify
-        sudo kubebuilder/bin/kubectl config set-context test-context --cluster=test-env --user=test-user --namespace=default 
+        
+        if [ "$USE_TLS" = "true" ]; then
+            # Secure mode with TLS
+            sudo kubebuilder/bin/kubectl config set-cluster test-env \
+                --server=https://127.0.0.1:6443 \
+                --certificate-authority=/etc/kubernetes/pki/ca.crt
+        else
+            # Insecure mode without TLS verification
+            sudo kubebuilder/bin/kubectl config set-cluster test-env \
+                --server=https://127.0.0.1:6443 \
+                --insecure-skip-tls-verify
+        fi
+        
+        sudo kubebuilder/bin/kubectl config set-context test-context \
+            --cluster=test-env \
+            --user=test-user \
+            --namespace=default 
         sudo kubebuilder/bin/kubectl config use-context test-context
     fi
 
@@ -167,6 +247,17 @@ EOF
     # Ensure containerd data directory exists with correct permissions
     sudo mkdir -p /var/lib/containerd
     sudo chmod 711 /var/lib/containerd
+
+    # Configure kube-proxy
+    sudo mkdir -p /var/lib/kube-proxy
+    cat << EOF | sudo tee /var/lib/kube-proxy/kube-proxy.conf.yml
+kind: KubeProxyConfiguration
+apiVersion: kubeproxy.config.k8s.io/v1alpha1
+clientConnection:
+  kubeconfig: "/var/lib/kubelet/kubeconfig"
+mode: "iptables"
+clusterCIDR: "173.22.0.0/16"
+EOF
 
     # Configure kubelet
     cat << EOF | sudo tee /var/lib/kubelet/config.yaml
@@ -249,24 +340,43 @@ start() {
     if ! is_running "kube-apiserver"; then
         echo "Starting kube-apiserver..."
         echo "use application/vnd.kubernetes.protobuf for better performance"
-        sudo kubebuilder/bin/kube-apiserver \
+        
+        # Build kube-apiserver command with common flags
+        APISERVER_CMD="sudo kubebuilder/bin/kube-apiserver \
             --etcd-servers=http://$HOST_IP:2379 \
             --service-cluster-ip-range=10.0.0.0/24 \
             --bind-address=0.0.0.0 \
             --secure-port=6443 \
             --advertise-address=$HOST_IP \
-            --authorization-mode=AlwaysAllow \
             --token-auth-file=/tmp/token.csv \
             --enable-priority-and-fairness=false \
             --allow-privileged=true \
-            --profiling=false \
+            --profiling=true \
             --storage-backend=etcd3 \
-            --storage-media-type=application/json \
             --v=0 \
             --cloud-provider=external \
             --service-account-issuer=https://kubernetes.default.svc.cluster.local \
             --service-account-key-file=/tmp/sa.pub \
-            --service-account-signing-key-file=/tmp/sa.key &
+            --service-account-signing-key-file=/tmp/sa.key"
+        
+        if [ "$USE_TLS" = "true" ]; then
+            # Secure mode with TLS and RBAC
+            echo "Starting in SECURE mode (TLS + RBAC)"
+            $APISERVER_CMD \
+                --authorization-mode=Node,RBAC \
+                --storage-media-type=application/vnd.kubernetes.protobuf \
+                --tls-cert-file=/etc/kubernetes/pki/apiserver.crt \
+                --tls-private-key-file=/etc/kubernetes/pki/apiserver.key \
+                --client-ca-file=/etc/kubernetes/pki/ca.crt \
+                --anonymous-auth=false \
+                --runtime-config=api/all=true &
+        else
+            # Insecure mode without TLS (for testing only)
+            echo "Starting in INSECURE mode (no TLS, AlwaysAllow)"
+            $APISERVER_CMD \
+                --authorization-mode=AlwaysAllow \
+                --storage-media-type=application/json &
+        fi
     fi
 
     if ! is_running "containerd"; then
@@ -287,11 +397,17 @@ start() {
     # Set up kubelet kubeconfig
     sudo cp /root/.kube/config /var/lib/kubelet/kubeconfig
     export KUBECONFIG=~/.kube/config
-    cp /tmp/sa.pub /tmp/ca.crt
 
-    # Create service account and configmap if they don't exist
+    # Create service account if it doesn't exist
     sudo kubebuilder/bin/kubectl create sa default 2>/dev/null || true
-    sudo kubebuilder/bin/kubectl create configmap kube-root-ca.crt --from-file=ca.crt=/tmp/ca.crt -n default 2>/dev/null || true
+    
+    # Update kube-root-ca.crt configmap with correct CA certificate
+    sudo kubebuilder/bin/kubectl delete configmap kube-root-ca.crt -n default 2>/dev/null || true
+    sudo kubebuilder/bin/kubectl create configmap kube-root-ca.crt --from-file=ca.crt=/etc/kubernetes/pki/ca.crt -n default
+    
+    # Also create in kube-system namespace for CoreDNS
+    sudo kubebuilder/bin/kubectl delete configmap kube-root-ca.crt -n kube-system 2>/dev/null || true
+    sudo kubebuilder/bin/kubectl create configmap kube-root-ca.crt --from-file=ca.crt=/etc/kubernetes/pki/ca.crt -n kube-system
 
 
     if ! is_running "kubelet"; then
@@ -308,13 +424,20 @@ start() {
             --node-ip=$HOST_IP \
             --cloud-provider=external \
             --cgroup-driver=cgroupfs \
-            --max-pods=4  \
+            --max-pods=5  \
             --v=1 &
     fi
 
     # Label the node so static pods with nodeSelector can be scheduled
     NODE_NAME=$(hostname)
     sudo kubebuilder/bin/kubectl label node "$NODE_NAME" node-role.kubernetes.io/master="" --overwrite || true
+
+    if ! is_running "kube-proxy"; then
+        echo "Starting kube-proxy..."
+        sudo kubebuilder/bin/kube-proxy \
+            --config=/var/lib/kube-proxy/kube-proxy.conf.yml \
+            --v=2 &
+    fi
 
     if ! is_running "kube-controller-manager"; then
         echo "Starting kube-controller-manager..."
@@ -345,6 +468,7 @@ stop() {
     stop_process "cloud-controller-manager"
     stop_process "gce_metadata_server"
     stop_process "kube-controller-manager"
+    stop_process "kube-proxy"
     stop_process "kubelet"
     stop_process "kube-scheduler"
     stop_process "kube-apiserver"

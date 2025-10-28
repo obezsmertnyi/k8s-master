@@ -267,8 +267,12 @@ You should see `status.ready: true` in the output.
 ### Running Tests
 
 ```bash
+go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
+~/go/bin/setup-envtest use -p path
+KUBEBUILDER_ASSETS=~/go/bin/setup-envtest use -p path go test -v ./test -count=1
+
 KUBEBUILDER_ASSETS="<PATH_TO_TESTENV_BIN>" go test ./...
-KUBEBUILDER_ASSETS="code/gfk/cp-ed210/bin/k8s/1.34.1-darwin-arm64" go test -v ./... -count=1
+
 ```
 
 ### Generating CRDs

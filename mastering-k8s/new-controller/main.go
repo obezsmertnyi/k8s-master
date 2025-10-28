@@ -12,18 +12,20 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	newv1 "github.com/mastering-k8s/new-controller/api/v1alpha1"
-	"github.com/mastering-k8s/new-controller/controllers"
+	newv1 "github.com/obezsmertnyi/k8s-master/mastering-k8s/new-controller/api/v1alpha1"
+	"github.com/obezsmertnyi/k8s-master/mastering-k8s/new-controller/controllers"
 )
 
 func main() {
 	var (
-		metricsAddr          string
-		enableLeaderElection bool
+		metricsAddr             string
+		enableLeaderElection    bool
+		leaderElectionNamespace string
 	)
 
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false, "Enable leader election for controller manager.")
+	flag.StringVar(&leaderElectionNamespace, "leader-election-namespace", "default", "Namespace for leader election lease.")
 	flag.Parse()
 
 	scheme := runtime.NewScheme()
@@ -32,10 +34,11 @@ func main() {
 	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
 
 	mgr, err := manager.New(config.GetConfigOrDie(), manager.Options{
-		Scheme:           scheme,
-		Metrics:          server.Options{BindAddress: metricsAddr},
-		LeaderElection:   enableLeaderElection,
-		LeaderElectionID: "newresource-controller",
+		Scheme:                  scheme,
+		Metrics:                 server.Options{BindAddress: metricsAddr},
+		LeaderElection:          enableLeaderElection,
+		LeaderElectionID:        "newresource-controller",
+		LeaderElectionNamespace: leaderElectionNamespace,
 	})
 	if err != nil {
 		panic(err)

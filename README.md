@@ -31,14 +31,14 @@ All tasks are organized in the [`tasks/`](./tasks/) directory, divided by module
 
 ### Module 02: Custom Kubernetes Controller
 
-| Task | Level | Status | Description |
-|------|-------|--------|-------------|
-| 02-1 | Basic | 📝 Planned | Create, build and run first custom controller |
-| 02-2 | Advanced | 📝 Planned | Implement tests and collect controller metrics |
-| 02-3 | Expert | 📝 Planned | Run controller in control plane with leader election |
-| 02-4 | Basic | 📝 Planned | Build GitOps loop with automated image updates |
-| 02-5 | Advanced | 📝 Planned | Break GitOps loop, migrate to gitless and solve imageupdate |
-| 02-6 | Expert | 📝 Planned | Configure ephemeral environments for GitHub PRs |
+| Task | Level | Status | Description | Files |
+|------|-------|--------|-------------|-------|
+| 02-1 | Basic | ✅ Complete | Create, build and run first custom controller | [Guide](./tasks/02-module/02-1-first-controller.md), [Code](./mastering-k8s/new-controller/) |
+| 02-2 | Advanced | ✅ Complete | Implement tests and collect controller metrics | [Guide](./tasks/02-module/02-2-tests-and-metrics.md), [Metrics Script](./tasks/02-module/02-2-check-metrics.sh) |
+| 02-3 | Expert | ✅ Complete | Run controller in control plane with leader election | [Guide](./tasks/02-module/02-3-leader-election.md), [Manifests](./mastering-k8s/k8s-manifests/) |
+| 02-4 | Basic | 📝 Planned | Build GitOps loop with automated image updates | [Guide](./tasks/02-module/02-4-gitops-loop.md) |
+| 02-5 | Advanced | 📝 Planned | Break GitOps loop, migrate to gitless and solve imageupdate | [Guide](./tasks/02-module/02-5-gitless-imageupdate.md) |
+| 02-6 | Expert | 📝 Planned | Configure ephemeral environments for GitHub PRs | [Guide](./tasks/02-module/02-6-ephemeral-environments.md) |
 
 **Learning Path:**
 - **Beginners**: Try to build a GitOps loop for an application with automated image updates (Task 02-4)
